@@ -2,159 +2,151 @@ import streamlit as st
 
 # Configuração da Página
 st.set_page_config(
-    page_title="Simulador de Comissão - Supervisor",
+    page_title="Simulador Supervisor - Parcelado",
     page_icon="👔",
-    layout="wide" # Layout expandido para caber as 4 colunas
+    layout="wide"
 )
 
 st.title("👔 Calculadora de Comissão - Supervisor")
-st.markdown("Insira os valores vendidos por tabela para calcular a remuneração baseada nas faixas de faturamento da equipe.")
+st.markdown("Cálculo detalhado com validação de totais e quebra por parcelas de pagamento.")
 
-# --- DADOS DE ENTRADA (4 COLUNAS) ---
-st.subheader("1. Insira o Faturamento por Tabela")
+# --- 1. VALIDAÇÃO DE SEGURANÇA ---
+st.header("1. Validação de Totais")
+col_val1, col_val2 = st.columns([1, 2])
+with col_val1:
+    meta_informada = st.number_input(
+        "Insira o VALOR TOTAL de todas as vendas (para conferência):", 
+        min_value=0.0, step=1000.0, format="%.2f"
+    )
+
+# --- 2. DADOS DE ENTRADA POR TABELA ---
+st.header("2. Detalhamento por Tabela")
 
 with st.container():
-    col1, col2, col3, col4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
 
-    with col1:
-        st.markdown("**1. BA, BMA e Est. 2%**")
-        st.caption("Multiplicador: 1.0 (Cheia)")
-        venda_tab1 = st.number_input("R$", min_value=0.0, step=1000.0, key="t1")
+    with c1:
+        st.info("**1. BA, BMA e Est. 2%**")
+        st.caption("Multiplicador: 1.0")
+        v_tab1 = st.number_input("R$", min_value=0.0, step=1000.0, key="t1")
 
-    with col2:
-        st.markdown("**2. SELECT, PESADOS**")
-        st.caption("Multiplicador: 1.0 (Cheia)")
-        venda_tab2 = st.number_input("R$", min_value=0.0, step=1000.0, key="t2")
+    with c2:
+        st.info("**2. SELECT, PESADOS**")
+        st.caption("Multiplicador: 1.0")
+        v_tab2 = st.number_input("R$", min_value=0.0, step=1000.0, key="t2")
 
-    with col3:
-        st.markdown("**3. Estendida 12x**")
-        st.caption("Multiplicador: 0.5 (Metade)")
-        venda_tab3 = st.number_input("R$", min_value=0.0, step=1000.0, key="t3")
+    with c3:
+        st.warning("**3. Estendida 12x**")
+        st.caption("Multiplicador: 0.5 (50%)")
+        v_tab3 = st.number_input("R$", min_value=0.0, step=1000.0, key="t3")
 
-    with col4:
-        st.markdown("**4. Estendida 1%**")
+    with c4:
+        st.error("**4. Estendida 1%**")
         st.caption("Multiplicador: 0.7 (70%)")
-        venda_tab4 = st.number_input("R$", min_value=0.0, step=1000.0, key="t4")
+        v_tab4 = st.number_input("R$", min_value=0.0, step=1000.0, key="t4")
 
-# Botão de Cálculo
+# --- LÓGICA DE VALIDAÇÃO VISUAL ---
+soma_tabelas = v_tab1 + v_tab2 + v_tab3 + v_tab4
+diferenca = meta_informada - soma_tabelas
+
 st.markdown("---")
-calcular = st.button("Calcular Comissão do Supervisor", type="primary")
+col_check1, col_check2 = st.columns(2)
+col_check1.metric("Total Informado", f"R$ {meta_informada:,.2f}")
+col_check2.metric(
+    "Soma das Tabelas", 
+    f"R$ {soma_tabelas:,.2f}", 
+    delta=f"Diferença: R$ {diferenca:,.2f}" if diferenca != 0 else "Valores Batem ✅",
+    delta_color="off" if diferenca == 0 else "inverse"
+)
+
+if diferenca != 0 and meta_informada > 0:
+    st.warning("⚠️ Atenção: O total informado não bate com a soma das colunas abaixo. Verifique os valores antes de considerar o resultado final.")
+
+# --- BOTÃO DE CÁLCULO ---
+st.markdown("---")
+calcular = st.button("Calcular Previsão de Pagamento", type="primary")
 
 if calcular:
-    # 1. SOMA TOTAL PARA DEFINIR A FAIXA (TIER)
-    faturamento_total = venda_tab1 + venda_tab2 + venda_tab3 + venda_tab4
-    
-    # Definição das Faixas baseada na Imagem do Supervisor
-    # Faixa 1: Até 4.8M | Faixa 2: Até 7.5M | Faixa 3: Acima de 7.5M
-    
-    taxa_total_faixa = 0.0
-    split_pagamento = [] # [1º pgto, 2º pgto, 3º pgto] (Percentuais brutos da faixa)
+    # 1. DEFINIÇÃO DA FAIXA (Baseada na Soma Total Real)
+    # Faixas da Imagem:
+    # Até 4.8M -> 0,16% | 0,045% | 0,045% (Total 0,25%)
+    # Até 7.5M -> 0,16% | 0,070% | 0,070% (Total 0,30%)
+    # Acima 7.5M -> 0,16% | 0,070% | 0,120% (Total 0,35%)
 
-    if faturamento_total <= 4800000:
-        nivel = "Faixa 1 (Até 4.8M)"
-        taxa_total_faixa = 0.25 # 0.25%
-        split_pagamento = [0.16, 0.045, 0.045]
-        
-    elif faturamento_total <= 7500000:
-        nivel = "Faixa 2 (Até 7.5M)"
-        taxa_total_faixa = 0.30 # 0.30%
-        split_pagamento = [0.16, 0.070, 0.070]
-        
+    pct_p1 = 0.0 # 1º Pagamento (Confirmação)
+    pct_p2 = 0.0 # 2º Pagamento (Confirmação)
+    pct_p3 = 0.0 # 3º Pagamento (Confirmação)
+    nome_faixa = ""
+
+    if soma_tabelas <= 4800000:
+        nome_faixa = "Faixa 1 (Até 4.8 Milhões)"
+        pct_p1, pct_p2, pct_p3 = 0.16, 0.045, 0.045
+    elif soma_tabelas <= 7500000:
+        nome_faixa = "Faixa 2 (Até 7.5 Milhões)"
+        pct_p1, pct_p2, pct_p3 = 0.16, 0.070, 0.070
     else:
-        nivel = "Faixa 3 (Acima de 7.5M)"
-        taxa_total_faixa = 0.35 # 0.35%
-        split_pagamento = [0.16, 0.070, 0.120]
+        nome_faixa = "Faixa 3 (Acima de 7.5 Milhões)"
+        pct_p1, pct_p2, pct_p3 = 0.16, 0.070, 0.120
 
-    # Mostra o cabeçalho do resultado
-    st.subheader("📊 Resultado da Safra")
-    c_res1, c_res2, c_res3 = st.columns(3)
-    c_res1.metric("Faturamento Total da Equipe", f"R$ {faturamento_total:,.2f}")
-    c_res2.metric("Faixa Atingida", nivel)
-    c_res3.metric("Percentual Base da Faixa", f"{taxa_total_faixa:.2f}%")
-
-    st.divider()
-
-    # 2. CÁLCULO PONDERADO POR TABELA
-    # Fórmula: Valor Venda * (Taxa da Faixa * Multiplicador da Tabela)
+    st.subheader(f"📊 Parâmetros da Safra: {nome_faixa}")
     
-    # Dicionário para facilitar o loop
-    # Nome, Valor Vendido, Multiplicador
-    tabelas_calc = [
-        ("1. BA/BMA/Est.2%", venda_tab1, 1.0),
-        ("2. SELECT/PESADOS", venda_tab2, 1.0),
-        ("3. Estendida 12x", venda_tab3, 0.5),
-        ("4. Estendida 1%", venda_tab4, 0.7),
+    # 2. CÁLCULO PONDERADO POR TABELA E POR PARCELA
+    # Estrutura: Lista de Tuplas (ValorVendido, Multiplicador)
+    dados_calculo = [
+        (v_tab1, 1.0), # Tabela 1
+        (v_tab2, 1.0), # Tabela 2
+        (v_tab3, 0.5), # Tabela 3 (50%)
+        (v_tab4, 0.7)  # Tabela 4 (70%)
     ]
 
-    total_comissao_base = 0.0
-    
-    # Listas para somar os pagamentos parcelados
-    total_pgto1 = 0.0
-    total_pgto2 = 0.0
-    total_pgto3 = 0.0
+    # Acumuladores de valores monetários
+    total_receber_p1 = 0.0
+    total_receber_p2 = 0.0
+    total_receber_p3 = 0.0
 
-    st.subheader("💰 Detalhamento por Tabela")
-    
-    # Cria colunas para mostrar o detalhe de cada tabela
-    cols_detalhe = st.columns(4)
+    for valor_venda, multiplicador in dados_calculo:
+        if valor_venda > 0:
+            # Aplica o multiplicador na porcentagem da parcela
+            # Ex: Se a parcela é 0.16% e multiplicador é 0.5, vira 0.08%
+            val_p1 = valor_venda * ((pct_p1 * multiplicador) / 100)
+            val_p2 = valor_venda * ((pct_p2 * multiplicador) / 100)
+            val_p3 = valor_venda * ((pct_p3 * multiplicador) / 100)
 
-    for i, (nome, valor, multi) in enumerate(tabelas_calc):
-        with cols_detalhe[i]:
-            if valor > 0:
-                # Taxa Efetiva = Taxa da Faixa * Multiplicador
-                taxa_efetiva = taxa_total_faixa * multi
-                comissao_item = valor * (taxa_efetiva / 100)
-                
-                total_comissao_base += comissao_item
-                
-                st.info(f"**{nome}**")
-                st.write(f"Venda: R$ {valor:,.2f}")
-                st.write(f"Mult: **{multi}x**")
-                st.write(f"Taxa Real: **{taxa_efetiva:.3f}%**")
-                st.success(f"Comissão: **R$ {comissao_item:,.2f}**")
-                
-                # Cálculo das Parcelas (Proporcional ao split da faixa, mas ajustado pelo multiplicador)
-                # Se a comissão caiu pela metade, a parcela cai pela metade também.
-                
-                # Fatores de proporção dentro da faixa (ex: 0.16 de 0.25 representa 64% do total)
-                fator_p1 = split_pagamento[0] / taxa_total_faixa
-                fator_p2 = split_pagamento[1] / taxa_total_faixa
-                fator_p3 = split_pagamento[2] / taxa_total_faixa
-                
-                p1_val = comissao_item * fator_p1
-                p2_val = comissao_item * fator_p2
-                p3_val = comissao_item * fator_p3
-                
-                total_pgto1 += p1_val
-                total_pgto2 += p2_val
-                total_pgto3 += p3_val
-                
-            else:
-                st.warning(f"**{nome}**\n\nSem vendas.")
+            total_receber_p1 += val_p1
+            total_receber_p2 += val_p2
+            total_receber_p3 += val_p3
 
-    # 3. RESULTADOS FINAIS COM DSR
-    dsr_valor = total_comissao_base * 0.25
-    total_final = total_comissao_base + dsr_valor
+    # 3. APLICAÇÃO DO DSR (25%) SOBRE AS PARCELAS
+    # O supervisor recebe a parcela JÁ com DSR
+    p1_com_dsr = total_receber_p1 * 1.25
+    p2_com_dsr = total_receber_p2 * 1.25
+    p3_com_dsr = total_receber_p3 * 1.25
+
+    total_geral_comissao = p1_com_dsr + p2_com_dsr + p3_com_dsr
+
+    # --- EXIBIÇÃO DOS RESULTADOS ---
+    st.divider()
+    st.header("💰 Fluxo de Recebimento Previsto")
+    st.caption("Valores abaixo já incluem DSR de 25%")
+
+    col_res1, col_res2, col_res3 = st.columns(3)
     
-    # Ajusta as parcelas para incluir DSR também (já que o DSR é pago junto)
-    total_pgto1_com_dsr = total_pgto1 * 1.25
-    total_pgto2_com_dsr = total_pgto2 * 1.25
-    total_pgto3_com_dsr = total_pgto3 * 1.25
+    col_res1.success(f"**1º Pagamento (Confirmação)**\n### R$ {p1_com_dsr:,.2f}")
+    col_res1.markdown(f"*Base da Faixa: {pct_p1}%*")
+    
+    col_res2.info(f"**2º Pagamento**\n### R$ {p2_com_dsr:,.2f}")
+    col_res2.markdown(f"*Base da Faixa: {pct_p2}%*")
+    
+    col_res3.info(f"**3º Pagamento**\n### R$ {p3_com_dsr:,.2f}")
+    col_res3.markdown(f"*Base da Faixa: {pct_p3}%*")
 
     st.divider()
-    st.header("🏆 Resumo Financeiro do Supervisor")
-    
-    c_fin1, c_fin2, c_fin3 = st.columns(3)
-    c_fin1.metric("Comissão Base (Soma)", f"R$ {total_comissao_base:,.2f}")
-    c_fin2.metric("➕ DSR (25%)", f"R$ {dsr_valor:,.2f}")
-    c_fin3.metric("💰 TOTAL A RECEBER", f"R$ {total_final:,.2f}", delta="Final")
-    
-    st.markdown("### 📅 Fluxo de Recebimento (Previsão com DSR)")
-    col_fluxo1, col_fluxo2, col_fluxo3 = st.columns(3)
-    
-    col_fluxo1.info(f"**1º Pagamento (Confirmação):**\nR$ {total_pgto1_com_dsr:,.2f}")
-    col_fluxo2.info(f"**2º Pagamento:**\nR$ {total_pgto2_com_dsr:,.2f}")
-    col_fluxo3.info(f"**3º Pagamento:**\nR$ {total_pgto3_com_dsr:,.2f}")
+    col_total_final, _ = st.columns([1, 2])
+    col_total_final.metric(
+        "🏆 COMISSÃO TOTAL DA SAFRA", 
+        f"R$ {total_geral_comissao:,.2f}",
+        help="Soma das 3 parcelas com DSR incluso"
+    )
 
 # --- RODAPÉ ---
 st.markdown("---")
