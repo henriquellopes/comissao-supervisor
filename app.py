@@ -28,19 +28,19 @@ with st.container():
     # Definição das tabelas e inputs
     with c1:
         st.info("1. BA, BMA, Est. 2%")
-        st.caption("Mult: 1.0")
+        st.caption("Mult: 1.0 (Cheio)")
         v_tab1 = st.number_input("R$", min_value=0.0, key="t1")
     with c2:
         st.info("2. SELECT, PESADOS")
-        st.caption("Mult: 1.0")
+        st.caption("Mult: 1.0 (Cheio)")
         v_tab2 = st.number_input("R$", min_value=0.0, key="t2")
     with c3:
         st.warning("3. Estendida 12x")
-        st.caption("Mult: 0.5")
+        st.caption("Mult: 0.5 (50%)")
         v_tab3 = st.number_input("R$", min_value=0.0, key="t3")
     with c4:
         st.error("4. Estendida 1%")
-        st.caption("Mult: 0.7")
+        st.caption("Mult: 0.7 (70%)")
         v_tab4 = st.number_input("R$", min_value=0.0, key="t4")
 
 # Validação Visual
